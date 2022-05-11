@@ -7,10 +7,10 @@ formatters:
     datefmt: "%Y-%m-%d %H:%M:%S"
 handlers:
   console:
-    class: zzsn2021.utils.logging.RichConsoleHandler
+    class: nlp_token.utils.logging.RichConsoleHandler
     formatter: default
   file:
-    class: zzsn2021.utils.logging.RichFileHandler
+    class: nlp_token.utils.logging.RichFileHandler
     formatter: default
     # relative to the job log directory
     filename: ${hydra.job.name}.log

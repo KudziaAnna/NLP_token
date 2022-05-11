@@ -5,4 +5,3 @@ pytorch-lightning-bolts==0.3.2
 pytorch-lightning==1.2.8
 
 --index-url https://pypi.python.org/simple/
--e .
