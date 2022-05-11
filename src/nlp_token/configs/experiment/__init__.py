@@ -29,6 +29,8 @@ class ExperimentSettings:
     # Enable initial validation before training
     validate_before_training: bool = True
 
+    model: str = 'RT'
+
     # ----------------------------------------------------------------------------------------------
     # Data loading settings
     # ----------------------------------------------------------------------------------------------
@@ -51,5 +53,17 @@ class ExperimentSettings:
     # Shape of input data (channels, height, width)
     input_size: Tuple[int, int, int] = (1, 28, 28)
 
+    # Shape of output data (channels, height, width)
+    output_size: Tuple[int, int, int] = (1, 28, 28)
+
     # Number of output classes
     n_classes: int = 10
+
+    # RTransformer parameters to explore d_model, h, ksize, n_level, n
+    model_spec: Tuple[int, int, int, int, int] = (32, 2, 7, 8, 2)
+
+    # RNN type
+    rnn_type: str = 'GRU'
+
+    # Dropout values
+    dropout: Tuple[float, float] = (0.05, 0.02)

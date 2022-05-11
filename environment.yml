@@ -1,4 +1,4 @@
-name: zzsn
+name: nlp
 dependencies:
   - python=3.9
   - conda-forge::jupyterlab
@@ -14,5 +14,5 @@ dependencies:
   - pytorch::torchvision=0.9.1
   - pytorch::torchaudio=0.8.1
   - cudatoolkit=11.1
-  - pip:
-      - -r file:requirements.txt
+  #- pip:
+  #    - -r file:requirements.txt

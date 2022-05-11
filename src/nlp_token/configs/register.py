@@ -28,7 +28,7 @@ class Config():
     Top-level Hydra config class.
     """
     defaults: List[Any] = field(default_factory=lambda: [
-        {'experiment': 'fashion'},
+        {'experiment': 'nlp'},
         {'optim': 'adam'},
         {'override hydra/job_logging': 'rich'},
         {'override hydra/hydra_logging': 'rich'},
