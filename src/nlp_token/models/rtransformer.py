@@ -214,22 +214,27 @@ class RT(nn.Module):
 
         self.cfg  = cfg
 
-        #self.input_size = cfg.experiment.input_size
         self.input_size = cfg.experiment.input_size
         self.output_size = cfg.experiment.output_size
-        self.d_model, self.h, self.ksize, self.n_level, self.n = cfg.experiment.model_spec
+        self.h, self.ksize, self.n_level, self.n = cfg.experiment.model_spec
         self.rnn_type = cfg.experiment.rnn_type
         self.dropout, self.emb_dropout = cfg.experiment.dropout
 
-        self.encoder = nn.Linear(self.input_size, self.d_model)
-        self.rt = RTransformer(self.d_model, self.rnn_type, self.ksize, self.n_level, self.n, self.h, self.dropout)
-        self.linear = nn.Linear(self.d_model, self.output_size)
+        self.encoder = nn.Embedding(self.output_size, self.input_size)
+        self.rt = RTransformer(self.input_size, self.rnn_type, self.ksize, self.n_level, self.n, self.h, self.dropout)
+        self.decoder = nn.Linear(self.input_size, self.output_size)
 
-    def forward(self, x):
-        """Inputs have to have dimension (N, C_in, L_in)"""
-        x = x.transpose(-2,-1)
-        x = self.encoder(x)
-        x = self.rt(x)  # input should have dimension (N, C, L)
-        x = x.transpose(-2,-1)
-        o = self.linear(x[:, :, -1])
-        return F.log_softmax(o, dim=1)
+        self.drop = nn.Dropout(self.emb_dropout)
+        self.init_weights()
+
+    def init_weights(self):
+        self.encoder.weight.data.normal_(0, 0.01)
+        self.decoder.bias.data.fill_(0)
+        self.decoder.weight.data.normal_(0, 0.01)
+
+    def forward(self, input):
+        """Input ought to have dimension (N, C_in, L_in), where L_in is the seq_len; here the input is (N, L, C)"""
+        emb = self.drop(self.encoder(input))
+        y = self.rt(emb)
+        y = self.decoder(y)
+        return y.contiguous()

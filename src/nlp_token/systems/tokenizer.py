@@ -20,6 +20,7 @@ from wandb.sdk.wandb_run import Run
 
 from ..configs import Config
 from ..models.rtransformer import RT
+from ..models.rnn_models import GRUNet, LSTMNet
 
 
 class TextTokenizer(pl.LightningModule):
@@ -34,16 +35,26 @@ class TextTokenizer(pl.LightningModule):
         self.wandb: Run
 
         self.cfg = cfg
+        
+        print(self.cfg.experiment.model)
 
         if self.cfg.experiment.model == 'RT':
             self.model = RT(self.cfg)
+        elif self.cfg.experiment.model == "GRU":
+            self.model = GRUNet(self.cfg)
+        elif self.cfg.experiment.model == "LSTM":
+            self.model = LSTMNet(self.cfg)
         else:
-            self.model = ConvNet(self.cfg)
+            raise Exception("No such model name...")
+            
         self.criterion = nn.CrossEntropyLoss()
+        self.num_folds = cfg.experiment.num_folds
+        self.current_fold = 0
 
         # Metrics
         self.train_acc = Accuracy()
         self.val_acc = Accuracy()
+
 
     # -----------------------------------------------------------------------------------------------
     # Default PyTorch Lightning hooks

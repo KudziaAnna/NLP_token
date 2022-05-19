@@ -5,7 +5,9 @@ defaults:
   - schema_experiment
 
 _tags_:
-  - FASHION
+  - LSTM_IT
+
+model: 'LSTM'
 
 resume_checkpoint: ~
 # e.g. resume path from local file:
@@ -14,4 +16,4 @@ resume_checkpoint: ~
 datamodule:
   _target_: pl_bolts.datamodules.fashion_mnist_datamodule.FashionMNISTDataModule
 
-  data_dir: ${oc.env:DATA_DIR}
+  data_dir: ${oc.env:DATA_DIR_IT}

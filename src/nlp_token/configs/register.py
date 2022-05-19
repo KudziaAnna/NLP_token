@@ -28,14 +28,16 @@ class Config():
     Top-level Hydra config class.
     """
     defaults: List[Any] = field(default_factory=lambda: [
-        {'experiment': 'nlp'},
+        {'experiment': 'r_transformer_eng'},
         {'optim': 'adam'},
         {'override hydra/job_logging': 'rich'},
         {'override hydra/hydra_logging': 'rich'},
     ])
 
     # Path settings
-    data_dir: str = SI("${oc.env:DATA_DIR}")
+    #data_dir_eng: str = SI("${oc.env:DATA_DIR_ENG}")
+    #data_dir_it: str = SI("${oc.env:DATA_DIR_IT}")
+    #data_dir: ExperimentSettings = MISSING
     output_dir: str = SI("${oc.env:RUN_DIR}")
 
     # Runtime configuration

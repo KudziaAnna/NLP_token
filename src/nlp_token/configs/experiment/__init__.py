@@ -29,19 +29,20 @@ class ExperimentSettings:
     # Enable initial validation before training
     validate_before_training: bool = True
 
-    model: str = 'RT'
+    model: Any = MISSING
 
     # ----------------------------------------------------------------------------------------------
     # Data loading settings
     # ----------------------------------------------------------------------------------------------
     # Training batch size
-    batch_size: int = 32
+    batch_size: int = 2
 
-    # Enable dataset shuffling
-    shuffle: bool = True
-
-    # Number of dataloader workers
+    # Number of folds
     num_workers: int = 8
+
+    num_folds: int = 5
+
+    data_dir: Any = MISSING
 
     # ----------------------------------------------------------------------------------------------
     # Dataset specific settings
@@ -51,19 +52,23 @@ class ExperimentSettings:
     datamodule: Any = MISSING
 
     # Shape of input data (channels, height, width)
-    input_size: Tuple[int, int, int] = (1, 28, 28)
+    input_size: int = 128
 
     # Shape of output data (channels, height, width)
-    output_size: Tuple[int, int, int] = (1, 28, 28)
+    output_size: int = 5
 
     # Number of output classes
     n_classes: int = 10
 
     # RTransformer parameters to explore d_model, h, ksize, n_level, n
-    model_spec: Tuple[int, int, int, int, int] = (32, 2, 7, 8, 2)
+    model_spec: Tuple[int, int, int, int] = (2, 7, 8, 2)
 
     # RNN type
     rnn_type: str = 'GRU'
 
     # Dropout values
     dropout: Tuple[float, float] = (0.05, 0.02)
+
+    #  GRU number of layers and hidden layer size
+    hidden_size: int = 5
+    n_layers: int = 10
