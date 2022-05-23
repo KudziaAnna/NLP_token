@@ -34,12 +34,11 @@ from pytorch_lightning.loggers import WandbLogger
 from wandb.sdk.wandb_run import Run
 
 from .configs import Config, get_tags, register_configs
-#from .systems.classifier import ImageClassifier
 from .systems.tokenizer import TextTokenizer
 from .utils.callbacks import CustomCheckpointer, get_resume_checkpoint
 from .utils.logging import log
 from .utils.rundir import setup_rundir
-from .datamodules.europarl_datamodule import EuroparlDataModule
+from .datamodules.token_datamodule import EuroparlDataModule
 
 wandb_logger: WandbLogger
 
@@ -62,8 +61,6 @@ def main(cfg: Config) -> None:
     pl.seed_everything(cfg.experiment.seed)
 
     run: Run = wandb_logger.experiment  # type: ignore
-
-    print(cfg.experiment.data_dir)
 
     # Prepare data using datamodules
     # https://pytorch-lightning.readthedocs.io/en/latest/extensions/datamodules.html#using-a-datamodule

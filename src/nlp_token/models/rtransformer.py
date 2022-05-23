@@ -3,6 +3,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence, pad_sequence, PackedSequence
 import math, copy, time
 import numpy as np
 from ..configs import Config
@@ -203,8 +204,9 @@ class RTransformer(nn.Module):
                 Block(d_model, d_model, rnn_type, ksize, N=N, h=h, dropout=dropout))
         self.forward_net = nn.Sequential(*layers) 
 
-    def forward(self, x):
-        x = self.forward_net(x)
+    def forward(self, pack_padded_sequences_vectors: PackedSequence):
+        x = self.forward_net(pack_padded_sequences_vectors)
+        x, _ = pad_packed_sequence(x, batch_first=True)
         return 
 
 # THIS PART NEEDS TO BE ADOPTED TO DATA LOOK INTO ORIGINAL REPO!
@@ -232,9 +234,9 @@ class RT(nn.Module):
         self.decoder.bias.data.fill_(0)
         self.decoder.weight.data.normal_(0, 0.01)
 
-    def forward(self, input):
+    def forward(self, pack_padded_sequences_vectors: PackedSequence):
         """Input ought to have dimension (N, C_in, L_in), where L_in is the seq_len; here the input is (N, L, C)"""
-        emb = self.drop(self.encoder(input))
+        emb = self.drop(self.encoder(pack_padded_sequences_vectors))
         y = self.rt(emb)
         y = self.decoder(y)
         return y.contiguous()

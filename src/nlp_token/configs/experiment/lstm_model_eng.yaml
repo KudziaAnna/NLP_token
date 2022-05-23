@@ -13,7 +13,5 @@ resume_checkpoint: ~
 # e.g. resume path from local file:
 # resume_checkpoint: ${oc.env:RESULTS_DIR}/${oc.env:WANDB_PROJECT}/20210422-1430-phenomenal-elephant/checkpoints/epoch_5.ckpt
 
-datamodule:
-  _target_: pl_bolts.datamodules.fashion_mnist_datamodule.FashionMNISTDataModule
 
-  data_dir: ${oc.env:DATA_DIR_ENG}
+data_dir: ${oc.env:DATA_DIR_ENG}

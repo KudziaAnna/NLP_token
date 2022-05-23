@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import random
 from typing import Any, Tuple, Union
-from nlp_token.models.convnet import ConvNet
 
 import numpy as np
 import pytorch_lightning as pl
@@ -12,15 +11,26 @@ import torch.nn.functional as F
 from hydra.utils import instantiate
 from pytorch_lightning.loggers.base import LoggerCollection
 from pytorch_lightning.loggers.wandb import WandbLogger
-from pytorch_lightning.metrics import Accuracy
+from torchtext.data.metrics import bleu_score
+from torchmetrics import BLEUScore
 from rich import print
+import pytorch_lightning as pl
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.optim.optimizer import Optimizer
 from wandb.sdk.wandb_run import Run
 
 from ..configs import Config
 from ..models.rtransformer import RT
-from ..models.rnn_models import GRUNet, LSTMNet
+from ..models.gru_model import GRUBasedSeq2Seq
+from ..datamodules.token_datamodule import prepare_dict, get_key
+
+
+def init_weights(m):
+    for name, param in m.named_parameters():
+        if 'weight' in name:
+            nn.init.normal_(param.data, mean=0, std=0.01)
+        else:
+            nn.init.constant_(param.data, 0)
 
 
 class TextTokenizer(pl.LightningModule):
@@ -35,26 +45,26 @@ class TextTokenizer(pl.LightningModule):
         self.wandb: Run
 
         self.cfg = cfg
-        
-        print(self.cfg.experiment.model)
 
         if self.cfg.experiment.model == 'RT':
             self.model = RT(self.cfg)
-        elif self.cfg.experiment.model == "GRU":
-            self.model = GRUNet(self.cfg)
-        elif self.cfg.experiment.model == "LSTM":
-            self.model = LSTMNet(self.cfg)
+        elif self.cfg.experiment.model == 'GRU':
+            self.model = GRUBasedSeq2Seq(cfg)
+        elif self.cfg.experiment.model == 'LSTM':
+            pass
         else:
-            raise Exception("No such model name...")
-            
-        self.criterion = nn.CrossEntropyLoss()
-        self.num_folds = cfg.experiment.num_folds
-        self.current_fold = 0
+            raise Exception("No such model name")
+        self.criterion = nn.CrossEntropyLoss(ignore_index = 0)
+
+        self.words_dict, _ = prepare_dict(self.cfg.experiment.data_dir)
+        self.get_word = get_key
 
         # Metrics
-        self.train_acc = Accuracy()
-        self.val_acc = Accuracy()
+        self.metric = BLEUScore(n_gram=1)
+        self.train_bleu = []
+        self.val_bleu = []
 
+        self.model.apply(init_weights)
 
     # -----------------------------------------------------------------------------------------------
     # Default PyTorch Lightning hooks
@@ -62,7 +72,6 @@ class TextTokenizer(pl.LightningModule):
     def on_fit_start(self) -> None:
         """
         Hook before `trainer.fit()`.
-
         Attaches current wandb run to `self.wandb`.
         """
         if isinstance(self.logger, LoggerCollection):
@@ -75,7 +84,6 @@ class TextTokenizer(pl.LightningModule):
     def on_save_checkpoint(self, checkpoint: dict[str, Any]) -> None:
         """
         Hook on checkpoint saving.
-
         Adds config and RNG states to the checkpoint file.
         """
         checkpoint['cfg'] = self.cfg
@@ -86,7 +94,6 @@ class TextTokenizer(pl.LightningModule):
     def on_load_checkpoint(self, checkpoint: dict[str, Any]) -> None:
         """
         Hook on checkpoint loading.
-
         Loads RNG states from the checkpoint file.
         """
         torch.default_generator.set_state(checkpoint['rng_torch'])
@@ -99,9 +106,7 @@ class TextTokenizer(pl.LightningModule):
     def configure_optimizers(self) -> Union[Optimizer, Tuple[List[Optimizer], List[_LRScheduler]]]:  # type: ignore
         """
         Define system optimization procedure.
-
         See https://pytorch-lightning.readthedocs.io/en/latest/common/lightning_module.html#configure-optimizers.
-
         Returns
         -------
         Union[Optimizer, Tuple[List[Optimizer], List[_LRScheduler]]]
@@ -128,23 +133,22 @@ class TextTokenizer(pl.LightningModule):
     # ----------------------------------------------------------------------------------------------
     # Forward
     # ----------------------------------------------------------------------------------------------
-    def forward(self, x: torch.Tensor) -> torch.Tensor:  # type: ignore
+    def forward(self, x: torch.Tensor, y:torch.Tensor) -> torch.Tensor:  # type: ignore
         """
         Forward pass of the whole system.
-
         In this simple case just calls the main model.
-
         Parameters
         ----------
         x : torch.Tensor
             Input tensor.
-
+        y: torch.Tensor
+            Target tensor.
         Returns
         -------
         torch.Tensor
             Output tensor.
         """
-        return self.model(x)
+        return self.model(x, y)
 
     # ----------------------------------------------------------------------------------------------
     # Loss
@@ -152,16 +156,13 @@ class TextTokenizer(pl.LightningModule):
     def calculate_loss(self, outputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """
         Compute loss value of a batch.
-
         In this simple case just forwards computation to default `self.criterion`.
-
         Parameters
         ----------
         outputs : torch.Tensor
             Network outputs with shape (batch_size, n_classes).
         targets : torch.Tensor
             Targets (ground-truth labels) with shape (batch_size).
-
         Returns
         -------
         torch.Tensor
@@ -175,24 +176,39 @@ class TextTokenizer(pl.LightningModule):
     def training_step(self, batch: list[torch.Tensor], batch_idx: int) -> dict[str, torch.Tensor]:  # type: ignore
         """
         Train on a single batch with loss defined by `self.criterion`.
-
         Parameters
         ----------
         batch : list[torch.Tensor]
             Training batch.
         batch_idx : int
             Batch index.
-
         Returns
         -------
         dict[str, torch.Tensor]
             Metric values for a given batch.
         """
-        inputs, targets = batch
-        outputs = self(inputs)  # basically equivalent to self.forward(data)
-        loss = self.calculate_loss(outputs, targets)
+        inputs, targets = batch["text"], batch["label"]
+        inputs = inputs.reshape(inputs.shape[0], inputs.shape[2]).T
+        targets = targets.reshape(targets.shape[0], targets.shape[2]).T
+        outputs = self(inputs, targets)  # basically equivalent to self.forward(data)
 
-        self.train_acc(F.softmax(outputs, dim=1), targets)
+        output_dim = outputs.shape[-1]
+        
+        to_loss_output = outputs[1:].reshape(-1, output_dim)
+        to_loss_target = targets[1:].reshape(-1)
+
+        loss = self.calculate_loss(to_loss_output, to_loss_target)
+
+        outputs = torch.argmax(outputs, dim=2)
+
+        for batch in range(outputs.shape[1]):
+            tmp_outputs = []
+            tmp_targets = []
+            for i in range(outputs.shape[0]):
+                tmp_outputs.append(self.get_word(self.words_dict, outputs[i, batch]))
+                tmp_targets.append(self.get_word(self.words_dict, targets[i, batch]))
+                
+            self.train_bleu.append(self.metric(tmp_targets, tmp_targets))
 
         return {
             'loss': loss,
@@ -202,7 +218,6 @@ class TextTokenizer(pl.LightningModule):
     def training_epoch_end(self, outputs: list[Any]) -> None:
         """
         Log training metrics.
-
         Parameters
         ----------
         outputs : list[Any]
@@ -212,12 +227,16 @@ class TextTokenizer(pl.LightningModule):
 
         metrics = {
             'epoch': float(step),
-            'train_acc': float(self.train_acc.compute().item()),
+            'train_bleu': float(np.average(self.train_bleu)),
         }
 
+        print("Bleu score: ")
+        print(np.average(self.train_bleu))
         # Average additional metrics over all batches
         for key in outputs[0]:
             metrics[key] = float(self._reduce(outputs, key).item())
+
+        self.train_bleu = []
 
         self.logger.log_metrics(metrics, step=step)
 
@@ -230,24 +249,36 @@ class TextTokenizer(pl.LightningModule):
     def validation_step(self, batch: list[torch.Tensor], batch_idx: int) -> dict[str, Any]:  # type: ignore
         """
         Compute validation metrics.
-
         Parameters
         ----------
         batch : list[torch.Tensor]
             Validation batch.
         batch_idx : int
             Batch index.
-
         Returns
         -------
         dict[str, torch.Tensor]
             Metric values for a given batch.
         """
 
-        inputs, targets = batch
-        outputs = self(inputs)  # basically equivalent to self.forward(data)
+        inputs, targets = batch["text"], batch["label"]
+        inputs = inputs.reshape(inputs.shape[0], inputs.shape[2]).T
+        targets = targets.reshape(targets.shape[0], targets.shape[2]).T
 
-        self.val_acc(F.softmax(outputs, dim=1), targets)
+        outputs = self(inputs, targets)  # basically equivalent to self.forward(data)
+
+        outputs = torch.argmax(outputs, dim=2)
+
+        for batch in range(outputs.shape[1]):
+            tmp_outputs = []
+            tmp_targets = []
+            for i in range(outputs.shape[0]):
+                tmp_outputs.append(self.get_word(self.words_dict, outputs[i, batch]))
+                tmp_targets.append(self.get_word(self.words_dict, targets[i, batch]))
+                
+            self.val_bleu.append(self.metric(tmp_targets, tmp_targets))
+
+
 
         return {
             # 'additional_metric': ...
@@ -257,7 +288,6 @@ class TextTokenizer(pl.LightningModule):
     def validation_epoch_end(self, outputs: list[Any]) -> None:
         """
         Log validation metrics.
-
         Parameters
         ----------
         outputs : list[Any]
@@ -267,11 +297,15 @@ class TextTokenizer(pl.LightningModule):
 
         metrics = {
             'epoch': float(step),
-            'val_acc': float(self.val_acc.compute().item()),
+            'val_bleu': float(np.average(self.val_bleu)),
         }
 
+        print("Bleu score: ")
+        print(np.average(self.val_bleu))
         # Average additional metrics over all batches
         for key in outputs[0]:
             metrics[key] = float(self._reduce(outputs, key).item())
+        
+        self.val_bleu = []
 
         self.logger.log_metrics(metrics, step=step)

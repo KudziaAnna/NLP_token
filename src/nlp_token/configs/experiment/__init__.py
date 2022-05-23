@@ -40,8 +40,6 @@ class ExperimentSettings:
     # Number of folds
     num_workers: int = 8
 
-    num_folds: int = 5
-
     data_dir: Any = MISSING
 
     # ----------------------------------------------------------------------------------------------
@@ -49,16 +47,11 @@ class ExperimentSettings:
     # ----------------------------------------------------------------------------------------------
     # PyTorch Lightning datamodule class
     # e.g.: `pl_bolts.datamodules.binary_mnist_datamodule.BinaryMNISTDataModule`
-    datamodule: Any = MISSING
 
-    # Shape of input data (channels, height, width)
-    input_size: int = 128
-
-    # Shape of output data (channels, height, width)
-    output_size: int = 5
-
-    # Number of output classes
-    n_classes: int = 10
+    embedding_dim: int = 50
+    input_size: int = 684
+    #output_size: int = 1026
+    output_size: int = 2347
 
     # RTransformer parameters to explore d_model, h, ksize, n_level, n
     model_spec: Tuple[int, int, int, int] = (2, 7, 8, 2)
@@ -70,5 +63,7 @@ class ExperimentSettings:
     dropout: Tuple[float, float] = (0.05, 0.02)
 
     #  GRU number of layers and hidden layer size
-    hidden_size: int = 5
-    n_layers: int = 10
+    hidden_size: int = 64
+    n_layers: int = 1
+
+    dict_size: int = 2347
