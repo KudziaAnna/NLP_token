@@ -3,6 +3,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence, pad_sequence, PackedSequence
 import math, copy, time
 import numpy as np
 from ..configs import Config
@@ -79,6 +80,8 @@ class MHPooling(nn.Module):
     def __init__(self, d_model, h, dropout=0.1):
         "Take in model size and number of heads."
         super(MHPooling, self).__init__()
+        print(d_model)
+        print(h)
         assert d_model % h == 0
         # We assume d_v always equals d_k
         self.d_k = d_model // h
@@ -203,9 +206,9 @@ class RTransformer(nn.Module):
                 Block(d_model, d_model, rnn_type, ksize, N=N, h=h, dropout=dropout))
         self.forward_net = nn.Sequential(*layers) 
 
-    def forward(self, x):
-        x = self.forward_net(x)
-        return 
+    def forward(self, input):
+        x = self.forward_net(input)
+        return x
 
 # THIS PART NEEDS TO BE ADOPTED TO DATA LOOK INTO ORIGINAL REPO!
 class RT(nn.Module):
@@ -214,22 +217,28 @@ class RT(nn.Module):
 
         self.cfg  = cfg
 
-        #self.input_size = cfg.experiment.input_size
         self.input_size = cfg.experiment.input_size
         self.output_size = cfg.experiment.output_size
-        self.d_model, self.h, self.ksize, self.n_level, self.n = cfg.experiment.model_spec
+        self.h, self.ksize, self.n_level, self.n = cfg.experiment.model_spec
         self.rnn_type = cfg.experiment.rnn_type
         self.dropout, self.emb_dropout = cfg.experiment.dropout
 
-        self.encoder = nn.Linear(self.input_size, self.d_model)
-        self.rt = RTransformer(self.d_model, self.rnn_type, self.ksize, self.n_level, self.n, self.h, self.dropout)
-        self.linear = nn.Linear(self.d_model, self.output_size)
+        self.encoder = nn.Embedding(cfg.experiment.dict_size, cfg.experiment.embedding_dim, padding_idx=4)
+        self.rt = RTransformer(cfg.experiment.embedding_dim, self.rnn_type, self.ksize, self.n_level, self.n, self.h, self.dropout)
+        self.decoder = nn.Linear(cfg.experiment.embedding_dim, cfg.experiment.dict_size)
 
-    def forward(self, x):
-        """Inputs have to have dimension (N, C_in, L_in)"""
-        x = x.transpose(-2,-1)
-        x = self.encoder(x)
-        x = self.rt(x)  # input should have dimension (N, C, L)
-        x = x.transpose(-2,-1)
-        o = self.linear(x[:, :, -1])
-        return F.log_softmax(o, dim=1)
+        self.drop = nn.Dropout(self.emb_dropout)
+        self.init_weights()
+
+    def init_weights(self):
+        self.encoder.weight.data.normal_(0, 0.01)
+        self.decoder.bias.data.fill_(0)
+        self.decoder.weight.data.normal_(0, 0.01)
+
+    def forward(self, input, target):
+        """Input ought to have dimension (N, C_in, L_in), where L_in is the seq_len; here the input is (N, L, C)"""
+
+        emb = self.drop(self.encoder(input))
+        y = self.rt(emb)
+        y = self.decoder(y)
+        return y.contiguous()

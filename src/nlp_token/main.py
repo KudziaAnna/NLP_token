@@ -34,11 +34,11 @@ from pytorch_lightning.loggers import WandbLogger
 from wandb.sdk.wandb_run import Run
 
 from .configs import Config, get_tags, register_configs
-#from .systems.classifier import ImageClassifier
 from .systems.tokenizer import TextTokenizer
 from .utils.callbacks import CustomCheckpointer, get_resume_checkpoint
 from .utils.logging import log
 from .utils.rundir import setup_rundir
+from .datamodules.token_datamodule import EuroparlDataModule
 
 wandb_logger: WandbLogger
 
@@ -64,11 +64,9 @@ def main(cfg: Config) -> None:
 
     # Prepare data using datamodules
     # https://pytorch-lightning.readthedocs.io/en/latest/extensions/datamodules.html#using-a-datamodule
-    datamodule: LightningDataModule = instantiate(
-        cfg.experiment.datamodule,
+    datamodule = EuroparlDataModule(
+        data_dir = cfg.experiment.data_dir,
         batch_size=cfg.experiment.batch_size,
-        seed=cfg.experiment.seed,
-        shuffle=cfg.experiment.shuffle,
         num_workers=cfg.experiment.num_workers
     )
 

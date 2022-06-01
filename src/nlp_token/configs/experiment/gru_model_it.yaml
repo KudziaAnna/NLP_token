@@ -1,0 +1,21 @@
+# Specific experiments settings
+# (default settings inherited from configs.experiment.ExperimentSettings)
+
+defaults:
+  - schema_experiment
+
+_tags_:
+  - GRU_IT
+
+model: 'GRU'
+
+resume_checkpoint: ~
+# e.g. resume path from local file:
+# resume_checkpoint: ${oc.env:RESULTS_DIR}/${oc.env:WANDB_PROJECT}/20210422-1430-phenomenal-elephant/checkpoints/epoch_5.ckpt
+
+data_dir: ${oc.env:DATA_DIR_IT}
+
+embedding_dim: 15
+input_size: 550
+output_size: 5852
+dict_size: 5852

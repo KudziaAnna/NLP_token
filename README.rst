@@ -1,12 +1,7 @@
-************************************************************
-Szablon kodu do uczenia sieci neuronowej w PyTorch Lightning
-************************************************************
-
-Przykład uczenia prostej sieci splotowej do klasyfikacji obrazów ze zbioru `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_.
-
-.. image:: figures/run-fashion-mnist.png
-  :width: 1000
-  :alt: Model training on Fashion-MNIST
+********************************************************************************************************
+Segmentacja oraz tokenizacja tekstu za pomocą sieci neuronowych dla języka angielskiego i włoskiego.
+Projekt realizowany w ramach przedmiotu Przetwarzanie języka naturalnego na Politechnice Warszawskiej.
+********************************************************************************************************
 
 Cechy
 -----
@@ -26,7 +21,7 @@ Instalacja
 Po sklonowaniu repozytorium tworzenie środowiska conda::
 
     $ conda env create -f environment.yml
-    $ conda activate zzsn
+    $ conda activate nlp_token
 
 Konfiguracja środowiska w pliku ``.env`` po utworzeniu konta na wandb.ai::
 
@@ -44,48 +39,14 @@ Uruchamianie eksperymentów
 
 Uruchomienie uczenia z katalogu głównego (plik ``.env`` musi znaleźć się na ścieżce wyszukiwania)::
 
-    $ python -m zzsn2021.main
+    $ python -m nlp_token.main experiment=gru_model_eng
 
 Dodanie metadanych dla danego uruchomienia::
     
-    $ python -m zzsn2021.main notes="Opis wariantu eksperymentu" tags="[TAG1, TAG2]"
+    $ python -m nlp_token.main experiment=gru_model_eng pl.max_epochs=150 experiment.batch_size=64
 
-Zmiana pojedynczych ustawień::
+Testowanie działania biblioteki Stanza na danych:
 
-    $ python -m zzsn2021.main pl.max_epochs=150 experiment.batch_size=64
-
-Zmiana całościowych ustawień eksperymentu na podstawie pliku YAML
-(np. ``src/zzsn2021/configs/experiment/fashion.yaml``)::
-
-    $ python -m zzsn2021.main experiment=fashion
-
-Pliki YAML są walidowane przez schematy definiowane jako `OmegaConf structured config <https://omegaconf.readthedocs.io/en/latest/structured_config.html>`_
-(np. ``src/zzsn2021/configs/experiment/__init__.py``).
-
-Wyłączenie przesyłania danych do *wandb*::
-
-    $ WANDB_MODE=dryrun python -m zzsn2021.main 
-
-Tryb *debug* (całkowicie wyłącza logowanie *wandb*)::
-
-    $ RUN_MODE=debug python -m zzsn2021.main
+    $ python stanza_tokenize/tokenize_stanza.py en
 
 
-Upload checkpointów do *wandb*
-------------------------------
-
-`wandb.ai <https://wandb.ai>`_ pozwala na zdalne przechowywanie i współdzielenie plików (np. wyuczonych modeli)
-za pomocą funkcjonalności `W&B Artifacts <https://docs.wandb.ai/guides/artifacts/api>`_.
-
-Do przesyłania checkpointów wygenerowanych w czasie uczenia można wykorzystać skrypt `cli.py`::
-
-    $ python -m zzsn2021.cli upload RUN_NAME CHECKPOINT_NAME ARTIFACT_NAME
-
-Przykładowo::
-
-    $ python -m zzsn2021.cli upload 20210422-1430-phenomenal-elephant epoch_5.ckpt test_model
-
-Tak przesłane pliki można później wykorzystać do wznowienia uczenia na innym systemie przez zmianę
-odpowiedniego ustawienia w konfiguracji eksperymentu, przykładowo::
-
-    resume_checkpoint: wandb://WANDB_USER/WANDB_PROJECT/test_model:v0@epoch_5.ckpt
