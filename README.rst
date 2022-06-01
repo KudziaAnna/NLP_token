@@ -1,6 +1,5 @@
-Segmentacja oraz tokenizacja tekstu za pomocą sieci neuronowych dla języka angielskiego i włoskiego.
-Projekt realizowany w ramach przedmiotu Przetwarzanie języka naturalnego na Politechnice Warszawskiej.
-
+Segmentacja oraz tokenizacja tekstu za pomocą sieci neuronowych dla języka angielskiego i włoskiego. Projekt realizowany w ramach przedmiotu Przetwarzanie języka naturalnego na Politechnice Warszawskiej
+-----
 
 Cechy
 -----
