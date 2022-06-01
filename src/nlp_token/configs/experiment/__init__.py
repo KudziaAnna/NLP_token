@@ -35,7 +35,7 @@ class ExperimentSettings:
     # Data loading settings
     # ----------------------------------------------------------------------------------------------
     # Training batch size
-    batch_size: int = 2
+    batch_size: int = 4
 
     # Number of folds
     num_workers: int = 8
@@ -48,13 +48,13 @@ class ExperimentSettings:
     # PyTorch Lightning datamodule class
     # e.g.: `pl_bolts.datamodules.binary_mnist_datamodule.BinaryMNISTDataModule`
 
-    embedding_dim: int = 50
-    input_size: int = 684
-    #output_size: int = 1026
-    output_size: int = 2347
+    embedding_dim: int = 10
+    input_size: int = 550
+    #output_size: int = 684
+    output_size: int = 4815
 
     # RTransformer parameters to explore d_model, h, ksize, n_level, n
-    model_spec: Tuple[int, int, int, int] = (2, 7, 8, 2)
+    model_spec: Tuple[int, int, int, int] = (5, 5, 1, 1)
 
     # RNN type
     rnn_type: str = 'GRU'
@@ -66,4 +66,4 @@ class ExperimentSettings:
     hidden_size: int = 64
     n_layers: int = 1
 
-    dict_size: int = 2347
+    dict_size: int = 4815

@@ -11,8 +11,8 @@ import torch.nn.functional as F
 from hydra.utils import instantiate
 from pytorch_lightning.loggers.base import LoggerCollection
 from pytorch_lightning.loggers.wandb import WandbLogger
-from torchtext.data.metrics import bleu_score
 from torchmetrics import BLEUScore
+from pytorch_lightning.metrics import Accuracy
 from rich import print
 import pytorch_lightning as pl
 from torch.optim.lr_scheduler import _LRScheduler
@@ -22,7 +22,8 @@ from wandb.sdk.wandb_run import Run
 from ..configs import Config
 from ..models.rtransformer import RT
 from ..models.gru_model import GRUBasedSeq2Seq
-from ..datamodules.token_datamodule import prepare_dict, get_key
+from ..models.lstm_model import LSTMBasedSeq2Seq
+from ..datamodules.token_datamodule import prepare_dict, get_key, get_words_weights
 
 
 def init_weights(m):
@@ -51,16 +52,22 @@ class TextTokenizer(pl.LightningModule):
         elif self.cfg.experiment.model == 'GRU':
             self.model = GRUBasedSeq2Seq(cfg)
         elif self.cfg.experiment.model == 'LSTM':
-            pass
+            self.model = LSTMBasedSeq2Seq(cfg)
         else:
             raise Exception("No such model name")
-        self.criterion = nn.CrossEntropyLoss(ignore_index = 0)
 
-        self.words_dict, _ = prepare_dict(self.cfg.experiment.data_dir)
+        self.words_dict = prepare_dict(self.cfg.experiment.data_dir)
         self.get_word = get_key
+        words_weights = get_words_weights(self.words_dict, self.cfg.experiment.data_dir)
+        self.criterion = nn.CrossEntropyLoss(ignore_index=4)
+        #self.criterion = nn.NLLLoss(ignore_index = 4)
+        #self.criterion = nn.MSELoss()
+
 
         # Metrics
         self.metric = BLEUScore(n_gram=1)
+        self.train_acc = Accuracy()
+        self.val_acc = Accuracy()
         self.train_bleu = []
         self.val_bleu = []
 
@@ -192,23 +199,23 @@ class TextTokenizer(pl.LightningModule):
         targets = targets.reshape(targets.shape[0], targets.shape[2]).T
         outputs = self(inputs, targets)  # basically equivalent to self.forward(data)
 
-        output_dim = outputs.shape[-1]
-        
-        to_loss_output = outputs[1:].reshape(-1, output_dim)
-        to_loss_target = targets[1:].reshape(-1)
+        tmp_loss = 0
+        for i in range(outputs.shape[1]):
+            tmp_loss += self.calculate_loss(outputs[:, i, :], targets[:, i])
 
-        loss = self.calculate_loss(to_loss_output, to_loss_target)
+        loss = torch.mean(tmp_loss)
 
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1)
+
+        #outputs = F.softmax(outputs, dim=2)
         outputs = torch.argmax(outputs, dim=2)
 
-        for batch in range(outputs.shape[1]):
-            tmp_outputs = []
-            tmp_targets = []
-            for i in range(outputs.shape[0]):
-                tmp_outputs.append(self.get_word(self.words_dict, outputs[i, batch]))
-                tmp_targets.append(self.get_word(self.words_dict, targets[i, batch]))
-                
-            self.train_bleu.append(self.metric(tmp_targets, tmp_targets))
+        pad_idx = targets == 4
+        outputs[pad_idx] = 4
+
+        print(outputs[:, -1].T)
+        print(targets[:, -1].T)
+        self.train_acc(outputs, targets)
 
         return {
             'loss': loss,
@@ -227,11 +234,9 @@ class TextTokenizer(pl.LightningModule):
 
         metrics = {
             'epoch': float(step),
-            'train_bleu': float(np.average(self.train_bleu)),
+            'train_acc': float(self.train_acc.compute().item()),
         }
 
-        print("Bleu score: ")
-        print(np.average(self.train_bleu))
         # Average additional metrics over all batches
         for key in outputs[0]:
             metrics[key] = float(self._reduce(outputs, key).item())
@@ -267,17 +272,15 @@ class TextTokenizer(pl.LightningModule):
 
         outputs = self(inputs, targets)  # basically equivalent to self.forward(data)
 
+        outputs = F.softmax(outputs, dim=2)
         outputs = torch.argmax(outputs, dim=2)
 
-        for batch in range(outputs.shape[1]):
-            tmp_outputs = []
-            tmp_targets = []
-            for i in range(outputs.shape[0]):
-                tmp_outputs.append(self.get_word(self.words_dict, outputs[i, batch]))
-                tmp_targets.append(self.get_word(self.words_dict, targets[i, batch]))
-                
-            self.val_bleu.append(self.metric(tmp_targets, tmp_targets))
+        pad_idx = targets == 4
+        outputs[pad_idx] = 4
 
+        print(outputs[:, -1].T)
+        print(targets[:, -1].T)
+        self.val_acc(outputs, targets)
 
 
         return {
@@ -297,11 +300,9 @@ class TextTokenizer(pl.LightningModule):
 
         metrics = {
             'epoch': float(step),
-            'val_bleu': float(np.average(self.val_bleu)),
+            'val_acc': float(self.val_acc.compute().item()),
         }
 
-        print("Bleu score: ")
-        print(np.average(self.val_bleu))
         # Average additional metrics over all batches
         for key in outputs[0]:
             metrics[key] = float(self._reduce(outputs, key).item())

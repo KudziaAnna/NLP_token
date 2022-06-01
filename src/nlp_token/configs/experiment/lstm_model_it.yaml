@@ -12,8 +12,9 @@ model: 'LSTM'
 resume_checkpoint: ~
 # e.g. resume path from local file:
 # resume_checkpoint: ${oc.env:RESULTS_DIR}/${oc.env:WANDB_PROJECT}/20210422-1430-phenomenal-elephant/checkpoints/epoch_5.ckpt
+embedding_dim: 15
+input_size: 550
+output_size: 5852
+dict_size: 5852
 
-datamodule:
-  _target_: pl_bolts.datamodules.fashion_mnist_datamodule.FashionMNISTDataModule
-
-  data_dir: ${oc.env:DATA_DIR_IT}
+data_dir: ${oc.env:DATA_DIR_IT}

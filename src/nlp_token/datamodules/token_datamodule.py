@@ -1,4 +1,3 @@
-from lib2to3.pgen2.tokenize import tokenize
 import random
 import numpy as np
 import torch
@@ -16,6 +15,38 @@ torch.manual_seed(SEED)
 torch.cuda.manual_seed(SEED)
 torch.backends.cudnn.deterministic = True
 
+def get_words_weights(word_dict, data_dir):
+    
+    word_freq = np.zeros((len(word_dict),1))
+
+    with open(data_dir) as f:
+        lines = f.readlines()
+        for line in lines:
+            tmp = line.split()
+            if line != "\n":
+                word_freq[word_dict[tmp[1]]] += 1
+                word_freq[3] += 1
+                word_freq[4] += 1
+            else:
+                word_freq[1] += 1
+                word_freq[2] += 1
+        word_freq[4] = 1
+    words_weights = []
+
+
+    for i in word_freq:
+        if i < 10:
+            words_weights.append(1.0)
+        elif i < 50:
+            words_weights.append(0.8)
+        elif i < 100:
+            words_weights.append(0.5)
+        else:
+            words_weights.append(0.005)
+
+    return torch.FloatTensor(words_weights)
+
+
 def get_key(word_dict, val):
     for key, value in word_dict.items():
          if val == value:
@@ -25,34 +56,31 @@ def get_key(word_dict, val):
 
 def prepare_dict(data_dir):
     word_dict = {
-        "<pad>" : 0,
-        "<sos>" : 1,
-        "<eos>" : 2,
-        "<sot>" : 3,
-        "<eot>" : 4,
+        "<sos>" : 0,
+        "<eos>" : 1,
+        "<sot>" : 2,
+        "<eot>" : 3,
+        "<pad>" : 4,
+        " ": 5,
     }
-    longest_sentence = 2 # include added sos i eos later
-    i = 2
     with open(data_dir) as f:
         lines = f.readlines()
         for line in lines:
             tmp = line.split()
             if line != "\n":
-                i += 3 # include added sot i eot
                 if tmp[1] not in word_dict:
                     word_dict[tmp[1]] = len(word_dict)
-            else:
-                if longest_sentence < i:
-                    longest_sentence = i
-                i = 0
-    return word_dict, longest_sentence
+
+    return word_dict
 
 def read_data(data_dir):
-    word_dict, longest_sentence = prepare_dict(data_dir)
+    word_dict = prepare_dict(data_dir)
+    print(len(word_dict))
+
     group_sent = []
     group_tok_sent = []
     tokenized_single_sent = [word_dict["<sos>"]]
-    single_sent = [word_dict["<pad>"]]
+    single_sent = [word_dict["<sos>"]]
     input_data = []
     target_data = []
 
@@ -64,30 +92,26 @@ def read_data(data_dir):
 
             if line == "\n":
                 tokenized_single_sent.append(word_dict["<eos>"])
-                while len(single_sent) < longest_sentence:
-                    single_sent.append(word_dict["<pad>"])
-
-                while len(tokenized_single_sent) < longest_sentence:
-                    tokenized_single_sent.append(word_dict["<pad>"])
-
+                single_sent.append(word_dict[" "])
                 group_sent += single_sent
                 group_tok_sent += tokenized_single_sent
                 tokenized_single_sent = [word_dict["<sos>"]]
-                single_sent = [word_dict["<pad>"]]
+                single_sent = [word_dict[" "]]
                 i  += 1
 
                 if i % 2 == 0:
-
-                    if len(group_sent) != 684 or len(group_tok_sent) != 684:
-                        print(len(group_sent))
-                    else:
-                        input_data.append(np.array(group_sent, dtype=np.float).reshape(1, len(group_sent)))
-                        target_data.append(np.array(group_tok_sent, dtype=np.float).reshape(1, len(group_tok_sent)))
+                    while len(group_sent) < 550:
+                        group_sent += [word_dict["<pad>"]]
+                        group_tok_sent += [word_dict["<pad>"]]
+                    input_data.append(np.array(group_sent, dtype=np.float).reshape(1, -1))
+                    target_data.append(np.array(group_tok_sent, dtype=np.float).reshape(1, -1))
 
                     group_sent = []
                     group_tok_sent = []  
             else:
+                single_sent.append(word_dict[" "])
                 single_sent.append(word_dict[tmp[1]])
+                single_sent.append(word_dict[" "])
 
                 tokenized_single_sent.append(word_dict["<sot>"])
                 tokenized_single_sent.append(word_dict[tmp[1]])
@@ -143,8 +167,10 @@ class EuroparlDataModule(pl.LightningDataModule):
         
 
     def setup(self, stage = None):
-
         length = len(self.dataset)
+        print("length")
+        print(length)
+        print([int(length * 0.6), int(length * 0.2), int(length * 0.2)])
         self.data_train, self.data_val, self.data_test = random_split(
             dataset=self.dataset,
             lengths=[int(length * 0.6) + 1, int(length * 0.2), int(length * 0.2)]

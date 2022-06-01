@@ -28,7 +28,7 @@ class Encoder(pl.LightningModule):
         self, cfg: Config):
         super().__init__()
 
-        self.embedding = nn.Embedding(cfg.experiment.dict_size, cfg.experiment.embedding_dim, padding_idx=0)
+        self.embedding = nn.Embedding(cfg.experiment.dict_size, cfg.experiment.embedding_dim, padding_idx=4)
         self.hid_dim = cfg.experiment.hidden_size
 
         self.rnn = nn.GRU(
@@ -90,7 +90,7 @@ class Decoder(pl.LightningModule):
         self.attention = Attention(cfg)
         self.hid_dim = cfg.experiment.hidden_size
 
-        self.embedding = nn.Embedding(cfg.experiment.dict_size, cfg.experiment.embedding_dim, padding_idx=0)
+        self.embedding = nn.Embedding(cfg.experiment.dict_size, cfg.experiment.embedding_dim, padding_idx=4)
         self.rnn = nn.GRU(cfg.experiment.embedding_dim + self.hid_dim * 2, self.hid_dim, cfg.experiment.n_layers, dropout = cfg.experiment.dropout[1])
         self.fc_out = nn.Linear(cfg.experiment.embedding_dim + self.hid_dim * 3, self.output_dim)
         self.dropout = nn.Dropout(cfg.experiment.dropout[1])
@@ -126,7 +126,7 @@ class GRUBasedSeq2Seq(pl.LightningModule):
         self.encoder = Encoder(cfg)
         self.decoder = Decoder(cfg)
     
-    def forward(self, src, trg, teacher_forcing_ratio = 0.5):
+    def forward(self, src, trg, teacher_forcing_ratio = 0.2):
         batch_size = trg.shape[1]
         trg_len = trg.shape[0]
         trg_vocab_size = self.decoder.output_dim
@@ -157,5 +157,6 @@ class GRUBasedSeq2Seq(pl.LightningModule):
             #if teacher forcing, use actual next token as next input
             #if not, use predicted token
             input = trg[t] if teacher_force else top1
+        
         
         return outputs

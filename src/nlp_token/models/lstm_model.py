@@ -28,7 +28,7 @@ class Encoder(pl.LightningModule):
         self, cfg: Config):
         super().__init__()
 
-        self.embedding = nn.Embedding(cfg.experiment.dict_size, cfg.experiment.embedding_dim, padding_idx=0)
+        self.embedding = nn.Embedding(cfg.experiment.dict_size, cfg.experiment.embedding_dim)
         self.hid_dim = cfg.experiment.hidden_size
 
         self.rnn = nn.LSTM(
@@ -38,7 +38,8 @@ class Encoder(pl.LightningModule):
             bidirectional = True,
             dropout = cfg.experiment.dropout[0]
         )
-        self.fc = nn.Linear(self.hid_dim * 2, self.hid_dim)
+        self.fc_hidden = nn.Linear(self.hid_dim * 2, self.hid_dim)
+        self.fc_cell = nn.Linear(self.hid_dim * 2, self.hid_dim)
         self.dropout = nn.Dropout(cfg.experiment.dropout[0])
 
     def forward(self, src):
@@ -47,11 +48,12 @@ class Encoder(pl.LightningModule):
         #src = torch.permute(src, (1, 0, 2))
 
         embedded = self.dropout(self.embedding(src))
-        output, hidden = self.rnn(embedded)
+        output, (hidden, cell) = self.rnn(embedded)
 
-        hidden = torch.tanh(self.fc(torch.cat((hidden[-2,:,:], hidden[-1,:,:]), dim = 1)))
+        hidden = self.fc_hidden(torch.cat((hidden[0:1], hidden[1:2]), dim=2))
+        cell = self.fc_cell(torch.cat((cell[0:1], cell[1:2]), dim=2))
 
-        return output, hidden
+        return output, hidden, cell
 
 class Attention(pl.LightningModule):
     def __init__(self, cfg: Config):
@@ -59,7 +61,7 @@ class Attention(pl.LightningModule):
         self.attn = nn.Linear((cfg.experiment.hidden_size * 2) + cfg.experiment.hidden_size, cfg.experiment.hidden_size)
         self.v = nn.Linear(cfg.experiment.hidden_size, 1, bias = False)
 
-    def forward(self, hidden, encoder_outputs):
+    def forward(self, encoder_outputs, hidden, cell):
         
         batch_size = encoder_outputs.shape[1]
         src_len = encoder_outputs.shape[0]
@@ -92,32 +94,40 @@ class Decoder(pl.LightningModule):
 
         self.embedding = nn.Embedding(cfg.experiment.dict_size, cfg.experiment.embedding_dim, padding_idx=0)
         self.rnn = nn.LSTM(cfg.experiment.embedding_dim + self.hid_dim * 2, self.hid_dim, cfg.experiment.n_layers, dropout = cfg.experiment.dropout[1])
-        self.fc_out = nn.Linear(cfg.experiment.embedding_dim + self.hid_dim * 3, self.output_dim)
-        self.dropout = nn.Dropout(cfg.experiment.dropout[1])
+        #self.fc_out = nn.Linear(cfg.experiment.embedding_dim + self.hid_dim * 3, self.output_dim)
 
-    def forward(self, input, hidden, encoder_output):
+        self.energy = nn.Linear(self.hid_dim * 3, 1)
+        self.fc = nn.Linear(self.hid_dim, self.output_dim)
+        self.dropout = nn.Dropout(cfg.experiment.dropout[1])
+        self.softmax = nn.Softmax(dim=0)
+        self.relu = nn.ReLU()
+
+
+
+    def forward(self, input,  encoder_output, hidden, cell):
         input = input.unsqueeze(0)
 
         embedded = self.dropout(self.embedding(input))
 
-        a = self.attention(hidden, encoder_output)
-        a = a.unsqueeze(1)
+        sequence_length = encoder_output.shape[0]
+        h_reshaped = hidden.repeat(sequence_length, 1, 1)
 
-        encoder_output = encoder_output.permute(1, 0, 2)
+        energy = self.relu(self.energy(torch.cat((h_reshaped, encoder_output), dim=2)))
 
-        weighted = torch.bmm(a, encoder_output)
-        weighted = weighted.permute(1, 0, 2)
+        a = self.softmax(energy)
+        context_vector = torch.einsum("snk,snl->knl", a, encoder_output)
 
-        rnn_input = torch.cat((embedded, weighted), dim = 2)
-        output, hidden = self.rnn(rnn_input, hidden.unsqueeze(0))
+        rnn_input = torch.cat((context_vector, embedded), dim=2)
+        # rnn_input: (1, N, hidden_size*2 + embedding_size)
 
-        embedded = embedded.squeeze(0)
-        output = output.squeeze(0)
-        weighted = weighted.squeeze(0)
+        outputs, (hidden, cell) = self.rnn(rnn_input, (hidden, cell))
+        # outputs shape: (1, N, hidden_size)
 
-        prediction = self.fc_out(torch.cat((output, weighted, embedded), dim = 1))
+        predictions = self.fc(outputs).squeeze(0)
+        # predictions: (N, hidden_size)
 
-        return prediction, hidden.squeeze(0)
+        return predictions, hidden, cell
+
 
 class LSTMBasedSeq2Seq(pl.LightningModule):
     def __init__(self, cfg: Config):
@@ -135,7 +145,7 @@ class LSTMBasedSeq2Seq(pl.LightningModule):
         outputs = torch.zeros(trg_len, batch_size, trg_vocab_size).to(self.device)
         
         #last hidden state of the encoder is used as the initial hidden state of the decoder
-        encoder_outputs, hidden= self.encoder(src)
+        encoder_outputs, hidden, cell= self.encoder(src)
         
         #first input to the decoder is the <sos> tokens
         input = trg[0, :]
@@ -143,7 +153,7 @@ class LSTMBasedSeq2Seq(pl.LightningModule):
         for t in range(1, trg_len):
             #insert input token embedding, previous hidden and previous cell states
             #receive output tensor (predictions) and new hidden and cell states
-            output, hidden = self.decoder(input, hidden, encoder_outputs)
+            output, hidden, cell = self.decoder(input, encoder_outputs, hidden, cell)
             
             #place predictions in a tensor holding predictions for each token
             outputs[t] = output
